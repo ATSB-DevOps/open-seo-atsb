@@ -90,6 +90,8 @@ export const readCsvVar = (name: string) =>
 /**
  * The gate itself: an email allow-policy on a self-hosted Access application.
  * `emailDomains` admits whole domains alongside the explicit emails;
+ * `groupIds` admits members of Access groups managed in Zero Trust (their
+ * membership is edited there and never reconciled by deploys);
  * `allowedIdps` restricts sign-in to those identity providers (one IdP also
  * skips the picker).
  */
@@ -101,6 +103,7 @@ export const emailAccessGate = (options: {
   domain: string;
   emails: string[];
   emailDomains?: string[];
+  groupIds?: string[];
   allowedIdps?: string[];
 }) =>
   Effect.gen(function* () {
@@ -112,6 +115,7 @@ export const emailAccessGate = (options: {
         ...(options.emailDomains ?? []).map((domain) => ({
           emailDomain: { domain },
         })),
+        ...(options.groupIds ?? []).map((id) => ({ group: { id } })),
       ],
     });
     const idps = options.allowedIdps ?? [];

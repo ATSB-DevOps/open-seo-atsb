@@ -258,6 +258,7 @@ const resolveSelfHostAccess = (
         domain: selfhostDomain || `${workerName(stage)}.${subdomain}`,
         emails: allowedEmails,
         emailDomains: yield* readCsvVar("ACCESS_ALLOWED_EMAIL_DOMAINS"),
+        groupIds: yield* readCsvVar("ACCESS_ALLOWED_GROUP_IDS"),
         allowedIdps: yield* readCsvVar("ACCESS_ALLOWED_IDPS"),
       });
       policyAud = application.aud;
