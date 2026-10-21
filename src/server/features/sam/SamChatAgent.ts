@@ -32,7 +32,7 @@ import {
   SamTelemetry,
   type SamTurnStats,
 } from "@/server/features/sam/samTurnTelemetry";
-import { buildChatAgentModel } from "@/server/lib/openrouter";
+import { buildChatAgentModel, chatAgentEffort } from "@/server/lib/openrouter";
 import {
   getEnvValueSync,
   isHostedServerAuthMode,
@@ -190,7 +190,7 @@ export class SamChatAgent extends Think {
   }
 
   getModel() {
-    return this.buildModel("max");
+    return this.buildModel(chatAgentEffort(this.env));
   }
 
   private buildModel(reasoningEffort: "max" | "low") {

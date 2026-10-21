@@ -11,6 +11,8 @@ import { z } from "zod";
 import {
   emailAccessGate,
   HOSTED_PROD_STAGE,
+  readCsvVar,
+  readSelfhostDomain,
   readWorkersSubdomain,
   requireAllowedEmails,
   workerName,
@@ -178,6 +180,7 @@ const resolveSelfHostAccess = (
   stage: string,
   provision: boolean,
   workersSubdomain: string,
+  selfhostDomain: string,
 ) =>
   Effect.gen(function* () {
     let teamDomain = yield* optionalVar("TEAM_DOMAIN");
@@ -252,8 +255,10 @@ const resolveSelfHostAccess = (
         applicationId: "SelfHostAccess",
         policyName: `open-seo ${stage} self-host users`,
         applicationName: `open-seo ${stage}`,
-        domain: `${workerName(stage)}.${subdomain}`,
+        domain: selfhostDomain || `${workerName(stage)}.${subdomain}`,
         emails: allowedEmails,
+        emailDomains: yield* readCsvVar("ACCESS_ALLOWED_EMAIL_DOMAINS"),
+        allowedIdps: yield* readCsvVar("ACCESS_ALLOWED_IDPS"),
       });
       policyAud = application.aud;
     }
@@ -276,6 +281,7 @@ const dataEnv = {
   GOOGLE_CLIENT_SECRET: optionalSecret("GOOGLE_CLIENT_SECRET"),
   OPENROUTER_API_KEY: optionalSecret("OPENROUTER_API_KEY"),
   OPENROUTER_MODEL: optionalVar("OPENROUTER_MODEL"),
+  OPENROUTER_REASONING_EFFORT: optionalVar("OPENROUTER_REASONING_EFFORT"),
   CONTEXT_API_KEY: optionalSecret("CONTEXT_API_KEY"),
   AUTUMN_SECRET_KEY: optionalSecret("AUTUMN_SECRET_KEY"),
   AUTUMN_WEBHOOK_SECRET: optionalSecret("AUTUMN_WEBHOOK_SECRET"),
@@ -323,6 +329,7 @@ export default Alchemy.Stack(
     );
     const databaseProvider = yield* optionalVar("DATABASE_PROVIDER");
     const workersSubdomain = yield* readWorkersSubdomain({ required: false });
+    const selfhostDomain = prod ? "" : yield* readSelfhostDomain;
 
     // Auth needs an absolute BETTER_AUTH_URL. Prod sets it explicitly;
     // previews always derive it from the deterministic worker name — a wrong
@@ -346,6 +353,8 @@ export default Alchemy.Stack(
           ),
         );
       }
+    } else if (selfhostDomain) {
+      authUrl = `https://${selfhostDomain}`;
     } else if (workersSubdomain) {
       authUrl = `https://${workerName(stage)}.${workersSubdomain}`;
     } else if (authMode === "hosted") {
@@ -364,6 +373,7 @@ export default Alchemy.Stack(
       stage,
       authMode === "cloudflare_access" && !prod,
       workersSubdomain,
+      selfhostDomain,
     );
 
     // Created once and bound into BOTH workers — they share the same
@@ -435,7 +445,14 @@ export default Alchemy.Stack(
     const app = yield* Cloudflare.Worker("open-seo", {
       name: workerName(stage),
       // Prod serves the real domains; the zone is inferred from the hostname.
-      domain: prod ? ["app.openseo.so", "www.app.openseo.so"] : undefined,
+      domain: prod
+        ? ["app.openseo.so", "www.app.openseo.so"]
+        : selfhostDomain
+          ? [selfhostDomain]
+          : undefined,
+      // With a custom domain, turn workers.dev off so the only hostname is
+      // the Access-gated one.
+      ...(selfhostDomain ? { url: false } : {}),
       // Prebuilt worker from `vite build` (@cloudflare/vite-plugin). The entry
       // exports the DO + WorkflowEntrypoint classes (re-exported by
       // src/server.ts), which `bundle: false` requires. Sibling chunks under

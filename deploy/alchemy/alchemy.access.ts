@@ -57,7 +57,42 @@ export const requireAllowedEmails = (remedy: string) =>
     return emails;
   });
 
-/** The gate itself: an email allow-policy on a self-hosted Access application. */
+/**
+ * Self-host only: the custom hostname (its zone must be in the account) the
+ * app serves on instead of workers.dev, gated by Access. Empty when unset.
+ */
+export const readSelfhostDomain = Effect.gen(function* () {
+  const domain = (yield* Config.string("SELFHOST_DOMAIN").pipe(
+    Config.withDefault(""),
+  )).trim();
+  if (domain && !/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(domain)) {
+    return yield* Effect.die(
+      new Error(
+        "Set SELFHOST_DOMAIN to a bare hostname such as seo.example.com (no scheme or path).",
+      ),
+    );
+  }
+  return domain;
+});
+
+/** Splits a comma-separated optional env value; empty when unset. */
+export const readCsvVar = (name: string) =>
+  Config.string(name).pipe(
+    Config.withDefault(""),
+    Config.map((value) =>
+      value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  );
+
+/**
+ * The gate itself: an email allow-policy on a self-hosted Access application.
+ * `emailDomains` admits whole domains alongside the explicit emails;
+ * `allowedIdps` restricts sign-in to those identity providers (one IdP also
+ * skips the picker).
+ */
 export const emailAccessGate = (options: {
   policyId: string;
   applicationId: string;
@@ -65,17 +100,28 @@ export const emailAccessGate = (options: {
   applicationName: string;
   domain: string;
   emails: string[];
+  emailDomains?: string[];
+  allowedIdps?: string[];
 }) =>
   Effect.gen(function* () {
     const allow = yield* Cloudflare.Access.Policy(options.policyId, {
       name: options.policyName,
       decision: "allow",
-      include: options.emails.map((email) => ({ email: { email } })),
+      include: [
+        ...options.emails.map((email) => ({ email: { email } })),
+        ...(options.emailDomains ?? []).map((domain) => ({
+          emailDomain: { domain },
+        })),
+      ],
     });
+    const idps = options.allowedIdps ?? [];
     return yield* Cloudflare.Access.Application(options.applicationId, {
       type: "self_hosted",
       name: options.applicationName,
       domain: options.domain,
       policies: [allow.policyId],
+      ...(idps.length
+        ? { allowedIdps: idps, autoRedirectToIdentity: idps.length === 1 }
+        : {}),
     });
   });

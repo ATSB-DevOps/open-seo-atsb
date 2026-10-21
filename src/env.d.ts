@@ -89,6 +89,8 @@ declare namespace Cloudflare {
     OPENROUTER_API_KEY?: string;
     // Optional OpenRouter model slug override (defaults in openrouter.ts).
     OPENROUTER_MODEL?: string;
+    // Reasoning effort for SAM's chat turns: "max" (default) or "low".
+    OPENROUTER_REASONING_EFFORT?: string;
   }
 }
 

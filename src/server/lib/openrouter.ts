@@ -4,6 +4,7 @@ import {
   type OpenRouterProvider,
 } from "@openrouter/ai-sdk-provider";
 import { wrapLanguageModel } from "ai";
+import { getEnvValueSync } from "@/server/lib/runtime-env";
 
 // OpenRouter model slug used for the SAM in-app chat agent. Override with
 // OPENROUTER_MODEL to swap models without a code change.
@@ -42,6 +43,12 @@ async function openAiBlockedHere(): Promise<boolean> {
     .then((trace) => /^loc=(\w+)$/m.exec(trace)?.[1] ?? "")
     .catch(() => "");
   return OPENAI_BLOCKED_COUNTRIES.includes(egressCountry);
+}
+
+/** SAM's chat-turn reasoning effort: "max" unless OPENROUTER_REASONING_EFFORT=low. */
+export function chatAgentEffort(env: object): "max" | "low" {
+  const effort = getEnvValueSync(env, "OPENROUTER_REASONING_EFFORT");
+  return effort === "low" ? "low" : "max";
 }
 
 /**
