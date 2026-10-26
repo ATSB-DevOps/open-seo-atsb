@@ -6,8 +6,10 @@ export const suggestedAiTopicSchema = z.object({
     .trim()
     .min(1)
     .max(120)
+    // Optional groups instead of {0,4}: this schema is sent to the model as
+    // structured output, and Anthropic rejects range quantifiers in patterns.
     .regex(
-      /^\S+(?:\s+\S+){0,4}$/,
+      /^\S+(?:\s+\S+)?(?:\s+\S+)?(?:\s+\S+)?(?:\s+\S+)?$/,
       "Generated topic names must contain five words or fewer.",
     )
     .describe("A succinct topic name, at most five words"),
