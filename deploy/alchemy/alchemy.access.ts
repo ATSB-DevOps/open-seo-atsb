@@ -75,6 +75,13 @@ export const readSelfhostDomain = Effect.gen(function* () {
   return domain;
 });
 
+/**
+ * Worker routing for SELFHOST_DOMAIN: bind the custom hostname and turn
+ * workers.dev off, so the Access-gated host is the only one.
+ */
+export const selfhostRouting = (domain: string) =>
+  domain ? { domain: [domain], url: false } : {};
+
 /** Splits a comma-separated optional env value; empty when unset. */
 export const readCsvVar = (name: string) =>
   Config.string(name).pipe(

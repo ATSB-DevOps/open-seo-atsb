@@ -1,5 +1,8 @@
 import { markOnboardingMilestone } from "@/server/email/onboarding-drip";
-import { isAuditRenderingAllowed } from "@/server/lib/audit/rendering-policy";
+import {
+  auditRenderingUnavailableMessage,
+  isAuditRenderingAllowed,
+} from "@/server/lib/audit/rendering-policy";
 import {
   lockRenderingCredits,
   releaseRenderingLocks,
@@ -31,6 +34,7 @@ import {
 import { normalizeAndValidateStartUrl } from "@/server/lib/audit/url-policy";
 import { reconcileRunningAudit } from "@/server/features/audit/services/auditReconciler";
 import { isHostedServerAuthMode } from "@/server/lib/runtime-env";
+import { startWorkflow } from "@/server/lib/startWorkflow";
 
 // Free accounts keep bounded audit capacity; rendering reserves usage credits.
 async function resolveAuditLimitTier(
@@ -55,7 +59,7 @@ async function startAudit(input: {
   if (renderJavaScript && !(await isAuditRenderingAllowed())) {
     throw new AppError(
       "AUDIT_RENDERING_UNAVAILABLE",
-      "JavaScript rendering is not available on this deployment. It needs a Cloudflare deployment with Browser Run, or CONTEXT_API_KEY. Run the audit without rendering instead.",
+      await auditRenderingUnavailableMessage(),
     );
   }
   const limits = AUDIT_LIMITS[input.limitTier];
@@ -133,23 +137,27 @@ async function startAudit(input: {
       });
     }
 
-    await env.SITE_AUDIT_WORKFLOW.create({
-      id: auditId,
-      params: {
-        auditId,
-        billingCustomer: {
-          userId: input.billingCustomer.userId,
-          userEmail: input.billingCustomer.userEmail,
-          organizationId: input.billingCustomer.organizationId,
-          projectId: input.billingCustomer.projectId,
+    await startWorkflow(
+      env.SITE_AUDIT_WORKFLOW,
+      {
+        id: auditId,
+        params: {
+          auditId,
+          billingCustomer: {
+            userId: input.billingCustomer.userId,
+            userEmail: input.billingCustomer.userEmail,
+            organizationId: input.billingCustomer.organizationId,
+            projectId: input.billingCustomer.projectId,
+          },
+          projectId: input.projectId,
+          startUrl,
+          config,
+          access: credential?.sealed,
+          renderLocks,
         },
-        projectId: input.projectId,
-        startUrl,
-        config,
-        access: credential?.sealed,
-        renderLocks,
       },
-    });
+      "site audit",
+    );
   } catch (error) {
     try {
       const instance = await env.SITE_AUDIT_WORKFLOW.get(auditId);
